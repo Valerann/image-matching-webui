@@ -6,10 +6,8 @@ import warnings
 from itertools import combinations
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from datasets import load_dataset
 
 import cv2
-import gradio as gr
 import matplotlib.pyplot as plt
 import numpy as np
 import poselib
@@ -44,7 +42,6 @@ DEFAULT_RANSAC_MAX_ITER = 10000
 DEFAULT_MIN_NUM_MATCHES = 4
 DEFAULT_MATCHING_THRESHOLD = 0.2
 DEFAULT_SETTING_GEOMETRY = "Homography"
-GRADIO_VERSION = gr.__version__.split(".")[0]
 MATCHER_ZOO = None
 
 
@@ -138,6 +135,7 @@ def get_feature_model(conf: Dict[str, Dict[str, Any]]):
 
 
 def download_example_images(repo_id, output_dir):
+    from datasets import load_dataset
     logger.info(f"Download example dataset from huggingface: {repo_id}")
     dataset = load_dataset(repo_id)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -740,7 +738,6 @@ def run_ransac(
     """
     if not state_cache:
         logger.info("Run Match first before Rerun RANSAC")
-        gr.Warning("Run Match first before Rerun RANSAC")
         return None, None
     t1 = time.time()
     logger.info(
@@ -888,9 +885,6 @@ def run_matching(
         logger.error(
             "Error: No images found! Please upload two images or select an example."
         )
-        raise gr.Error(
-            "Error: No images found! Please upload two images or select an example."
-        )
     # init output
     output_keypoints = None
     output_matches_raw = None
@@ -906,7 +900,7 @@ def run_matching(
 
     efficiency = model["info"].get("efficiency", "high")
     if efficiency == "low":
-        gr.Warning(
+        logger.Warning(
             "Matcher {} is time-consuming, please wait for a while".format(
                 model["info"].get("name", "unknown")
             )
@@ -976,9 +970,6 @@ def run_matching(
         )
         pred = match_features.match_images(matcher, pred0, pred1)
         del extractor
-    # gr.Info(
-    #     f"Matching images done using: {time.time()-t1:.3f}s",
-    # )
     logger.info(f"Matching images done using: {time.time()-t1:.3f}s")
     t1 = time.time()
 
@@ -1021,7 +1012,6 @@ def run_matching(
         ransac_max_iter=ransac_max_iter,
     )
 
-    # gr.Info(f"RANSAC matches done using: {time.time()-t1:.3f}s")
     logger.info(f"RANSAC matches done using: {time.time()-t1:.3f}s")
     t1 = time.time()
 
@@ -1042,7 +1032,6 @@ def run_matching(
         pred,
     )
 
-    # gr.Info(f"Display matches done using: {time.time()-t1:.3f}s")
     logger.info(f"Display matches done using: {time.time()-t1:.3f}s")
     t1 = time.time()
     # plot wrapped images
@@ -1053,7 +1042,6 @@ def run_matching(
         choice_geometry_type,
     )
     plt.close("all")
-    # gr.Info(f"In summary, total time: {time.time()-t0:.3f}s")
     logger.info(f"TOTAL time: {time.time()-t0:.3f}s")
 
     state_cache = pred

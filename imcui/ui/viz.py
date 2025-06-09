@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Tuple, Union
 import cv2
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import numpy as np
-import seaborn as sns
 
 from ..hloc.utils.viz import add_text, plot_keypoints
 
@@ -76,7 +76,8 @@ def plot_color_line_matches(
         The modified matplotlib figure.
     """
     n_lines = lines[0].shape[0]
-    colors = sns.color_palette("husl", n_colors=n_lines)
+    colors = cm.rainbow(np.linspace(0, 1, n_lines))
+    # colors = sns.color_palette("husl", n_colors=n_lines)
     np.random.shuffle(colors)
     alphas = np.ones(n_lines)
     if correct_matches is not None:
@@ -240,7 +241,7 @@ def fig2im(fig: matplotlib.figure.Figure) -> np.ndarray:
         the RGB values of the figure.
     """
     fig.canvas.draw()
-    (width, height) = fig.canvas.get_width_height()
+    (width, height) = [int(x) for x in fig.get_size_inches()*fig.dpi]
     buf_ndarray = np.frombuffer(fig.canvas.tostring_rgb(), dtype="u1")
     return buf_ndarray.reshape(height, width, 3)
 

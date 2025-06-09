@@ -32,7 +32,7 @@ def test_all():
             logger.info(f"Skipping {k} ...")
 
 
-def test_one():
+def test_one_sparse():
     img_path1 = ROOT / "tests/data/02928139_3448003521.jpg"
     img_path2 = ROOT / "tests/data/17295357_9106075285.jpg"
 
@@ -74,6 +74,13 @@ def test_one():
     log_path.mkdir(exist_ok=True, parents=True)
     api.visualize(log_path=log_path)
 
+def test_one_dense():
+    img_path1 = ROOT / "tests/data/02928139_3448003521.jpg"
+    img_path2 = ROOT / "tests/data/17295357_9106075285.jpg"
+
+    image0 = cv2.imread(str(img_path1))[:, :, ::-1]  # RGB
+    image1 = cv2.imread(str(img_path2))[:, :, ::-1]  # RGB
+
     # dense
     conf = {
         "matcher": {
@@ -107,5 +114,6 @@ def test_one():
 
 
 if __name__ == "__main__":
-    test_one()
+    test_one_dense()
+    test_one_sparse()
     test_all()
