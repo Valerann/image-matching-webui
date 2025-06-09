@@ -70,7 +70,7 @@ def test_one_sparse():
     api = ImageMatchingAPI(conf=conf, device=DEVICE)
     pred = api(image0, image1)
     assert pred is not None
-    log_path = ROOT / "experiments" / "one"
+    log_path = ROOT / "experiments" / "sparse"
     log_path.mkdir(exist_ok=True, parents=True)
     api.visualize(log_path=log_path)
 
@@ -108,7 +108,7 @@ def test_one_dense():
     api = ImageMatchingAPI(conf=conf, device=DEVICE)
     pred = api(image0, image1)
     assert pred is not None
-    log_path = ROOT / "experiments" / "one"
+    log_path = ROOT / "experiments" / "dense"
     log_path.mkdir(exist_ok=True, parents=True)
     api.visualize(log_path=log_path)
 
