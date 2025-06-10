@@ -1,7 +1,8 @@
 # api.py
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+from collections import OrderedDict
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,9 +16,33 @@ from ..ui.viz import display_matches, fig2im, plot_images
 
 warnings.simplefilter("ignore")
 
+class LRUCache:
+    def __init__(self, capacity: int=None):
+        if capacity is None or capacity <= 0:
+            capacity = 100
+        self.capacity = capacity
+        self.cache = OrderedDict()
+
+    def get(self, name: str):
+        if name not in self.cache:
+            return None
+        else:
+            self.cache.move_to_end(name, last=True)
+            return self.cache[name]
+
+    def put(self, name: str, value) -> None:
+        if name in self.cache:
+            self.cache[name] = value
+            self.cache.move_to_end(name, last=True)
+        else:
+            if len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)
+            self.cache[name] = value
+
 
 class ImageMatchingAPI(torch.nn.Module):
     default_conf = {
+        "cache_size": 100,
         "ransac": {
             "enable": True,
             "estimator": "poselib",
@@ -60,6 +85,7 @@ class ImageMatchingAPI(torch.nn.Module):
             memory_reserved = torch.cuda.memory_reserved(device)
             logger.info(f"GPU memory allocated: {memory_allocated / 1024**2:.3f} MB")
             logger.info(f"GPU memory reserved: {memory_reserved / 1024**2:.3f} MB")
+        self.features_cache = LRUCache(self.conf.get("cache_size"))
         self.pred = None
 
     def parse_match_config(self, conf):
@@ -105,7 +131,7 @@ class ImageMatchingAPI(torch.nn.Module):
         else:
             self.extractor = get_feature_model(self.conf["feature"])
 
-    def _forward(self, img0, img1):
+    def _forward(self, img0, img1, name0:str=None, name1:str=None):
         if self.dense:
             pred = match_dense.match_images(
                 self.matcher,
@@ -118,12 +144,8 @@ class ImageMatchingAPI(torch.nn.Module):
                 self.match_conf["model"]["name"]
             )
         else:
-            pred0 = extract_features.extract(
-                self.extractor, img0, self.extract_conf["preprocessing"]
-            )
-            pred1 = extract_features.extract(
-                self.extractor, img1, self.extract_conf["preprocessing"]
-            )
+            pred0 = self._extract_features(img0, name0)
+            pred1 = self._extract_features(img1, name1)
             pred = match_features.match_images(self.matcher, pred0, pred1)
         return pred
 
@@ -137,6 +159,18 @@ class ImageMatchingAPI(torch.nn.Module):
             for k, v in ret.items()
         }
         return ret
+
+    def _extract_features(self,img0: np.ndarray, name:str=None) -> Dict[str, np.ndarray]:
+        if name is None:
+            pred = None
+        else:
+            pred = self.features_cache.get(name)
+        if pred is None:
+            pred = extract_features.extract(
+                self.extractor, img0, self.extract_conf["preprocessing"]
+            )
+            self.features_cache.put(name,pred)
+        return pred
 
     @torch.inference_mode()
     def extract(self, img0: np.ndarray, **kwargs) -> Dict[str, np.ndarray]:
@@ -154,10 +188,7 @@ class ImageMatchingAPI(torch.nn.Module):
         self.extractor.conf["keypoint_threshold"] = kwargs.get(
             "keypoint_threshold", 0.0
         )
-
-        pred = extract_features.extract(
-            self.extractor, img0, self.extract_conf["preprocessing"]
-        )
+        pred = self._extract_features(img0, kwargs.get("name"))
         pred = self._convert_pred(pred)
         # back to origin scale
         s0 = pred["original_size"] / pred["size"]
@@ -177,6 +208,8 @@ class ImageMatchingAPI(torch.nn.Module):
         self,
         img0: np.ndarray,
         img1: np.ndarray,
+        name0: str=None,
+        name1: str=None
     ) -> Dict[str, np.ndarray]:
         """
         Forward pass of the image matching API.
@@ -203,7 +236,7 @@ class ImageMatchingAPI(torch.nn.Module):
         # Take as input a pair of images (not a batch)
         assert isinstance(img0, np.ndarray)
         assert isinstance(img1, np.ndarray)
-        self.pred = self._forward(img0, img1)
+        self.pred = self._forward(img0, img1, name0, name1)
         if self.conf["ransac"]["enable"]:
             self.pred = self._geometry_check(self.pred)
         return self.pred
@@ -233,10 +266,20 @@ class ImageMatchingAPI(torch.nn.Module):
         )
         return pred
 
+    def get_postfix(self):
+        if self.conf["dense"]:
+            postfix = str(self.conf["matcher"]["model"]["name"])
+        else:
+            postfix = "{}_{}".format(
+                str(self.conf["feature"]["model"]["name"]),
+                str(self.conf["matcher"]["model"]["name"]),
+            )
+        return postfix
+
     def visualize(
         self,
         log_path: Optional[Path] = None,
-    ) -> None:
+    ) -> Tuple[int]:
         """
         Visualize the matches.
 
@@ -246,13 +289,7 @@ class ImageMatchingAPI(torch.nn.Module):
         Returns:
             None
         """
-        if self.conf["dense"]:
-            postfix = str(self.conf["matcher"]["model"]["name"])
-        else:
-            postfix = "{}_{}".format(
-                str(self.conf["feature"]["model"]["name"]),
-                str(self.conf["matcher"]["model"]["name"]),
-            )
+        postfix = self.get_postfix()
         titles = [
             "Image 0 - Keypoints",
             "Image 1 - Keypoints",
@@ -306,3 +343,4 @@ class ImageMatchingAPI(torch.nn.Module):
                 output_matches_ransac[:, :, ::-1].copy(),  # RGB -> BGR
             )
             plt.close("all")
+        return num_matches_raw,num_matches_ransac
