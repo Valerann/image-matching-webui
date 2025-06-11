@@ -27,6 +27,7 @@ class LRUCache:
         if name not in self.cache:
             return None
         else:
+            print("Reusing cached results")
             self.cache.move_to_end(name, last=True)
             return self.cache[name]
 
@@ -279,6 +280,9 @@ class ImageMatchingAPI(torch.nn.Module):
     def visualize(
         self,
         log_path: Optional[Path] = None,
+        title0:str="",
+        title1:str="",
+        plot_all:bool=False
     ) -> Tuple[int]:
         """
         Visualize the matches.
@@ -291,8 +295,8 @@ class ImageMatchingAPI(torch.nn.Module):
         """
         postfix = self.get_postfix()
         titles = [
-            "Image 0 - Keypoints",
-            "Image 1 - Keypoints",
+            "Image 0 - Keypoints" + " " + title0,
+            "Image 1 - Keypoints" + " " + title1
         ]
         pred: Dict[str, Any] = self.pred
         image0: np.ndarray = pred["image0_orig"]
@@ -310,16 +314,16 @@ class ImageMatchingAPI(torch.nn.Module):
         output_keypoints = fig2im(output_keypoints)
         # plot images with raw matches
         titles = [
-            "Image 0 - Raw matched keypoints",
-            "Image 1 - Raw matched keypoints",
+            "Image 0 - Matched" + " " + title0,
+            "Image 1 - Matched" + " " + title1
         ]
         output_matches_raw, num_matches_raw = display_matches(
             pred, titles=titles, tag="KPTS_RAW"
         )
         # plot images with ransac matches
         titles = [
-            "Image 0 - Ransac matched keypoints",
-            "Image 1 - Ransac matched keypoints",
+            "Image 0 - Ransac" + " " + title0,
+            "Image 1 - Ransac" + " " + title1
         ]
         output_matches_ransac, num_matches_ransac = display_matches(
             pred, titles=titles, tag="KPTS_RANSAC"
@@ -330,14 +334,15 @@ class ImageMatchingAPI(torch.nn.Module):
             img_matches_ransac_path: Path = (
                 log_path / f"img_matches_ransac_{postfix}.png"
             )
-            cv2.imwrite(
-                str(img_keypoints_path),
-                output_keypoints[:, :, ::-1].copy(),  # RGB -> BGR
-            )
-            cv2.imwrite(
-                str(img_matches_raw_path),
-                output_matches_raw[:, :, ::-1].copy(),  # RGB -> BGR
-            )
+            if plot_all:
+                cv2.imwrite(
+                    str(img_keypoints_path),
+                    output_keypoints[:, :, ::-1].copy(),  # RGB -> BGR
+                )
+                cv2.imwrite(
+                    str(img_matches_raw_path),
+                    output_matches_raw[:, :, ::-1].copy(),  # RGB -> BGR
+                )
             cv2.imwrite(
                 str(img_matches_ransac_path),
                 output_matches_ransac[:, :, ::-1].copy(),  # RGB -> BGR
